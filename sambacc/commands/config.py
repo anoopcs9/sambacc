@@ -43,6 +43,7 @@ from .cli import (
     perms_handler,
     setup_steps,
 )
+from .users import sync_sys_users, sync_passdb_users
 
 _logger = logging.getLogger(__name__)
 
@@ -96,6 +97,14 @@ def _read_config(ctx: Context) -> config.InstanceConfig:
     ).get(ctx.cli.identity)
 
 
+def _readpid(path: pathlib.Path) -> int:
+    try:
+        return int(path.read_text())
+    except Exception as err:
+        _logger.warning("Unable to read pid file %r: %s", path, err)
+        return -1
+
+
 @dataclasses.dataclass(frozen=True)
 class ChangeContext:
     current: config.InstanceConfig
@@ -146,109 +155,73 @@ class ChangeContext:
         return dataclasses.replace(self, applied=self.applied + 1)
 
 
-UpdateResult = typing.Tuple[typing.Optional[config.InstanceConfig], bool]
-UpdateFunc = typing.Callable[..., UpdateResult]
+ChangeCheck = typing.Callable[[ChangeContext], ChangeContext]
 
 
-def _update_config(
-    ctx: Context,
-    current: config.InstanceConfig,
-    previous: typing.Optional[config.InstanceConfig],
-    ensure_paths: bool = True,
-    notify_server: bool = True,
-) -> UpdateResult:
-    """Compare the current and previous instance configurations. If they
-    differ, ensure any new paths, update the samba config, and inform any
-    running smbds of the new configuration.  Return the current config and a
-    boolean indicating if the instance configs differed.
-    """
-    # has the config changed?
-    differences = current.compare(previous, log_diff=_log_diff)
-    changed = bool(differences)
-    # ensure share paths exist
-    if changed and ensure_paths:
-        for share in current.shares():
-            path = share.path()
-            if not path:
-                continue
-            _logger.info(f"Ensuring share path: {path}")
-            paths.ensure_share_dirs(path)
-            _logger.info(f"Updating permissions if needed: {path}")
-            perms_handler(share.permissions_config(), path).update()
-    # update smb config
-    if changed:
-        _logger.info("Updating samba configuration")
-        loader = nc.NetCmdLoader()
-        loader.import_config(current)
-    # update users and groups if they changed
-    if config.DifferenceFlag.USERS_GROUPS in differences:
-        _logger.info("Updating users and groups")
-        from .users import sync_sys_users, sync_passdb_users
-
-        sync_sys_users(
-            current,
-            ctx.cli.passwd_location,
-            ctx.cli.group_location,
-        )
-        sync_passdb_users(current)
-    # notify smbd of changes
-    if changed and notify_server:
-        try:
-            subprocess.check_call(
-                list(samba_cmds.smbcontrol["smbd", "reload-config"])
-            )
-        except subprocess.CalledProcessError as err:
-            # smbd may not be up yet (or restarting) and thus not
-            # reachable via smbcontrol. This is expected to resolve itself
-            # once smbd finishes starting, so don't let it crash the
-            # config watch loop.
-            _logger.warning(
-                "smbcontrol could not notify smbd of the updated"
-                " configuration (exit status %s); smbd may still be"
-                " starting up and will pick up the change once it is"
-                " running: %s",
-                err.returncode,
-                err,
-            )
-    return current, changed
+def _share_paths(chctx: ChangeContext) -> ChangeContext:
+    if not chctx.changed:
+        return chctx
+    # TODO: would we only ensure paths on the leader?
+    # TODO: does this do something on non-fs backed shares (like cephfs)?
+    for share in chctx.current.shares():
+        path = share.path()
+        if not path:
+            continue
+        _logger.info(f"Ensuring share path: {path}")
+        paths.ensure_share_dirs(path)
+        _logger.info(f"Updating permissions if needed: {path}")
+        perms_handler(share.permissions_config(), path).update()
+    return chctx.set_applied()
 
 
-def _exec_if_leader(ctx: Context, cond_func: UpdateFunc) -> UpdateFunc:
-    """Run the cond func only on "nodes" that are the cluster leader."""
-
-    # CTDB status and leader detection is not changeable at runtime.
-    # we do not need to account for it changing in the updated config file(s)
-    @functools.wraps(cond_func)
-    def _call_if_leader(
-        current: config.InstanceConfig, previous: config.InstanceConfig
-    ) -> UpdateResult:
-        with best_leader_locator(ctx.instance_config) as ll:
-            if not ll.is_leader():
-                _logger.info("skipping config update. node not leader")
-                return None, False
-            _logger.info("checking for update. node is leader")
-            result = cond_func(current, previous)
-        return result
-
-    return _call_if_leader
-
-
-def _readpid(path: pathlib.Path) -> int:
+def _samba_config(chctx: ChangeContext) -> ChangeContext:
+    if not chctx.changed:
+        return chctx
+    _logger.info("Updating samba configuration")
+    loader = nc.NetCmdLoader()
+    loader.import_config(chctx.current)
     try:
-        return int(path.read_text())
-    except Exception as err:
-        _logger.warning("Unable to read pid file %r: %s", path, err)
-        return -1
+        subprocess.check_call(
+            list(samba_cmds.smbcontrol["smbd", "reload-config"])
+        )
+    except subprocess.CalledProcessError as err:
+        # smbd may not be up yet (or restarting) and thus not
+        # reachable via smbcontrol. This is expected to resolve itself
+        # once smbd finishes starting, so don't let it crash the
+        # config watch loop.
+        _logger.warning(
+            "smbcontrol could not notify smbd of the updated"
+            " configuration (exit status %s); smbd may still be"
+            " starting up and will pick up the change once it is"
+            " running: %s",
+            err.returncode,
+            err,
+        )
+    return chctx.set_applied()
 
 
-def _signal_pids_dir(
-    pids_dir: str,
-    current: config.InstanceConfig,
-    previous: typing.Optional[config.InstanceConfig],
-) -> UpdateResult:
-    changed = not current.same(previous, log_diff=_log_diff)
-    if not changed:
-        return current, changed
+def _ctr_users_groups(ctx: Context, chctx: ChangeContext) -> ChangeContext:
+    """Update host (container) defined users and groups if the users/groups
+    have changed.
+    """
+    if not chctx.match(config.DifferenceFlag.USERS_GROUPS):
+        return chctx
+
+    # update users and groups if they changed
+    _logger.info("Updating users and groups")
+
+    sync_sys_users(
+        chctx.current,
+        ctx.cli.passwd_location,
+        ctx.cli.group_location,
+    )
+    sync_passdb_users(chctx.current)
+    return chctx.set_applied()
+
+
+def _signal_pids_dir(pids_dir: str, chctx: ChangeContext) -> ChangeContext:
+    if not chctx.changed:
+        return chctx
 
     # something changed, send signal to pids found in pid files in dir
     try:
@@ -259,7 +232,7 @@ def _signal_pids_dir(
         ]
     except FileNotFoundError:
         _logger.warning("pids dir not found: %r; skipping pids", pids_dir)
-        return current, changed
+        return chctx
 
     pids = [pid for pid in _pids if pid > 0]  # filter out errors
     if pids != _pids:
@@ -271,51 +244,76 @@ def _signal_pids_dir(
             os.kill(pid, signal.SIGHUP)
         except OSError as err:
             _logger.warning("Failed to SIGHUP %d: %s", pid, err)
-    return current, changed
+    return chctx.set_applied()
+
+
+def _when_leader(cb: ChangeCheck, chctx: ChangeContext) -> ChangeContext:
+    # NOTE: it's important to maintain leader status while running the callback
+    # thus the context manager.
+    # CTDB enablement and the need for leader detection should not change
+    # while the process is running. Thus, _when_leader can wrap all future uses
+    # of a change check.
+    cbname = getattr(cb, "__name__", "")
+    if not cbname and hasattr(cb, "func"):
+        cbname = getattr(cb.func, "__name__", f"?{cb}")
+    with best_leader_locator(chctx.current) as ll:
+        if not ll.is_leader():
+            _logger.info("skipping %s. node not leader", cbname)
+            return chctx
+        _logger.info("executing %s. node is leader", cbname)
+        return cb(chctx)
+    return chctx
 
 
 class Trigger:
     def __init__(self) -> None:
-        self._actions: list[tuple[str, UpdateFunc]] = []
+        self._actions: list[tuple[str, ChangeCheck]] = []
 
-    def add(self, name: str, fn: UpdateFunc) -> None:
+    def add(self, name: str, fn: ChangeCheck) -> None:
         self._actions.append((name, fn))
+
+    def apply(self, chctx: ChangeContext) -> ChangeContext:
+        for name, cb in self._actions:
+            _logger.debug("Config change callback: %r", name)
+            chctx = cb(chctx.diff())
+            _logger.debug(
+                "Callback: %r: changed: %r, applied: %r",
+                name,
+                chctx.changed,
+                chctx.applied,
+            )
+        return chctx
 
     def __call__(
         self,
         current: config.InstanceConfig,
         previous: typing.Optional[config.InstanceConfig],
-    ) -> UpdateResult:
-        changed = False
-        for name, cb in self._actions:
-            _logger.debug("Config change callback: %r", name)
-            cfg, chg = cb(current, previous)
-            _logger.debug("Callback: %r: changed: %r", name, chg)
-            current = cfg if cfg else current
-            changed = changed or chg
-        return current, changed
+    ) -> tuple[config.InstanceConfig, bool]:
+        rctx = self.apply(ChangeContext(current=current, previous=previous))
+        return current, rctx.updated
 
 
 @commands.command(name="update-config", arg_func=_update_config_args)
 def update_config(ctx: Context) -> None:
     _get_config = functools.partial(_read_config, ctx)
-    _uconfig = functools.partial(_update_config, ctx)
+    cb_share_paths = _share_paths
+    cb_samba_config = _samba_config
+    cb_ctr_users_groups = functools.partial(_ctr_users_groups, ctx)
     trigger = Trigger()
 
     if ctx.instance_config.with_ctdb:
         _logger.info("enabling ctdb support: will check for leadership")
-        trigger.add("samba", _exec_if_leader(ctx, _uconfig))
-    else:
-        trigger.add("samba", _uconfig)
+        cb_share_paths = functools.partial(_when_leader, cb_share_paths)
+        cb_samba_config = functools.partial(_when_leader, cb_samba_config)
+    trigger.add("paths", cb_share_paths)
+    trigger.add("users_groups", cb_ctr_users_groups)
+    trigger.add("samba", cb_samba_config)
     if pids_dir := ctx.cli.signal_pids_dir:
         trigger.add("pids", functools.partial(_signal_pids_dir, pids_dir))
 
     if ctx.cli.watch:
         _logger.info("will watch configuration source")
         waiter = best_waiter(ctx.cli.config)
-        # Pass None as initial_value so the first iteration always writes the
-        # current config to the samba registry, consistent with the non-watch
-        # code path which also passes None unconditionally.
         watch(
             waiter,
             None,
@@ -323,7 +321,5 @@ def update_config(ctx: Context) -> None:
             trigger,
         )
     else:
-        # we pass None as the previous config so that the command is
-        # not nearly always a no-op when run from the command line.
-        trigger(_get_config(), None)
+        trigger.apply(ChangeContext(current=_get_config()))
     return
