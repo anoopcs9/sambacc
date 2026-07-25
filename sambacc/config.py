@@ -489,14 +489,16 @@ class ShareConfig:
         self.name = sharename
         self.iconfig = iconfig or {}
 
+    def _cfg(self) -> dict[str, dict[str, str]]:
+        return self.gconfig.data["shares"][self.name]
+
     def share_options(self) -> typing.Iterable[typing.Tuple[str, str]]:
         """Iterate over share options."""
-        share_section = self.gconfig.data["shares"][self.name]
-        return iter(share_section.get("options", {}).items())
+        return iter(self._cfg().get("options", {}).items())
 
     def path(self) -> typing.Optional[str]:
         """Return the path value from the smb.conf options."""
-        share_section = self.gconfig.data["shares"][self.name]
+        share_section = self._cfg()
         try:
             return share_section["options"]["path"]
         except KeyError:
@@ -508,7 +510,7 @@ class ShareConfig:
         # but if it does not it will default to the instance's
         # config
         try:
-            share_perms = self.gconfig.data["shares"][self.name]["permissions"]
+            share_perms = self._cfg()["permissions"]
             return PermissionsConfig(share_perms)
         except KeyError:
             pass
@@ -519,6 +521,24 @@ class ShareConfig:
             pass
         # use the internal defaults
         return PermissionsConfig({})
+
+    def meta(self) -> ShareMeta:
+        """Return a share meta configuration for the share."""
+        # each share can have it's own meta config,
+        # but if it does not it will default to the instance's
+        # share meta config
+        try:
+            share_meta = self._cfg()["meta"]
+            return ShareMeta(share_meta)
+        except KeyError:
+            pass
+        try:
+            instance_meta = self.iconfig["sharemeta"]
+            return ShareMeta(instance_meta)
+        except KeyError:
+            pass
+        # use the internal defaults
+        return ShareMeta({})
 
 
 class UserEntry:
@@ -668,6 +688,29 @@ class PermissionsConfig:
     def options(self) -> dict[str, str]:
         filter_keys = {self._method_key, self._status_xattr_key}
         return {k: v for k, v in self._pconf.items() if k not in filter_keys}
+
+
+class ShareOrigin(enum.Enum):
+    UNKNOWN = "unknown"
+    LOCAL = "local"  # media local to host
+    SHARED = "shared"  # shared media
+    VIRTUAL = "virtual"  # media not accessible by posix apis
+
+
+class ShareMeta:
+    def __init__(self, mconf: dict[str, str]) -> None:
+        self._mconf = mconf
+
+    @property
+    def origin(self) -> ShareOrigin:
+        """Return the origin (kind of path) that a share is based on.
+        Defaults to 'shared' as historically that's what other parts of sambacc
+        assumed.
+        """
+        try:
+            return ShareOrigin(self._mconf.get("origin", "shared"))
+        except (KeyError, ValueError):
+            return ShareOrigin.UNKNOWN
 
 
 class KeyBridgeScopeConfig:
