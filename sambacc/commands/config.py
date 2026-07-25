@@ -154,16 +154,29 @@ class ChangeContext:
     def set_applied(self) -> Self:
         return dataclasses.replace(self, applied=self.applied + 1)
 
+    def shares_by_origin(
+        self, origin: config.ShareOrigin
+    ) -> list[config.ShareConfig]:
+        return [s for s in self.current.shares() if s.meta().origin is origin]
+
 
 ChangeCheck = typing.Callable[[ChangeContext], ChangeContext]
 
 
-def _share_paths(chctx: ChangeContext) -> ChangeContext:
-    if not chctx.changed:
+def _share_paths(
+    origin: config.ShareOrigin, chctx: ChangeContext
+) -> ChangeContext:
+    """Iterate over shares matching the given origin type, ensuring the paths
+    and permissions are set up.
+    Shares are separated by origin in order to only run this function on
+    the appropriate node(s).
+    For example: Shares in the local origin can, and should, be set up on all
+    nodes in a CTDB cluster while shares in the shared origin should only be
+    set up once (by the leader).
+    """
+    if not chctx.match(config.DifferenceFlag.SHARES):
         return chctx
-    # TODO: would we only ensure paths on the leader?
-    # TODO: does this do something on non-fs backed shares (like cephfs)?
-    for share in chctx.current.shares():
+    for share in chctx.shares_by_origin(origin):
         path = share.path()
         if not path:
             continue
@@ -296,16 +309,24 @@ class Trigger:
 @commands.command(name="update-config", arg_func=_update_config_args)
 def update_config(ctx: Context) -> None:
     _get_config = functools.partial(_read_config, ctx)
-    cb_share_paths = _share_paths
+    cb_share_paths_local = functools.partial(
+        _share_paths, config.ShareOrigin.LOCAL
+    )
+    cb_share_paths_shared = functools.partial(
+        _share_paths, config.ShareOrigin.SHARED
+    )
     cb_samba_config = _samba_config
     cb_ctr_users_groups = functools.partial(_ctr_users_groups, ctx)
     trigger = Trigger()
 
     if ctx.instance_config.with_ctdb:
         _logger.info("enabling ctdb support: will check for leadership")
-        cb_share_paths = functools.partial(_when_leader, cb_share_paths)
+        cb_share_paths_shared = functools.partial(
+            _when_leader, cb_share_paths_shared
+        )
         cb_samba_config = functools.partial(_when_leader, cb_samba_config)
-    trigger.add("paths", cb_share_paths)
+    trigger.add("paths_shared", cb_share_paths_shared)
+    trigger.add("paths_local", cb_share_paths_local)
     trigger.add("users_groups", cb_ctr_users_groups)
     trigger.add("samba", cb_samba_config)
     if pids_dir := ctx.cli.signal_pids_dir:
