@@ -19,12 +19,15 @@
 import argparse
 import functools
 import os
+import unittest.mock
 
 import sambacc.config
 import sambacc.opener
 import sambacc.paths
+import sambacc.passdb_loader
 
 import sambacc.commands.config
+import sambacc.commands.cli
 
 
 config1 = """
@@ -98,9 +101,21 @@ class FakeContext:
         self.require_validation = False
 
     @classmethod
-    def defaults(cls, cfg_path, watch=False, signal_pids_dir=None):
+    def defaults(
+        cls, cfg_path, watch=False, signal_pids_dir=None, tmpdir=None
+    ):
         with open(cfg_path, "w") as fh:
             fh.write(config1)
+        if tmpdir:
+            pl = sambacc.commands.cli.AltLocation.parse(
+                f"/foo/passwd:{tmpdir}/"
+            )
+            gl = sambacc.commands.cli.AltLocation.parse(
+                f"/foo/group:{tmpdir}/"
+            )
+        else:
+            pl = sambacc.commands.cli.AltLocation("/foo/passwd")
+            gl = sambacc.commands.cli.AltLocation("/foo/group")
 
         config = [cfg_path]
         identity = "updateme"
@@ -110,6 +125,8 @@ class FakeContext:
                 "signal_pids_dir": signal_pids_dir,
                 "config": config,
                 "identity": identity,
+                "passwd_location": pl,
+                "group_location": gl,
             },
             sambacc.config.read_config_files(config).get(identity),
         )
@@ -156,7 +173,7 @@ def test_update_config_changed(tmp_path, monkeypatch):
     _gen_fake_cmd(fake, str(chkpath))
     monkeypatch.setattr(sambacc.samba_cmds, "_GLOBAL_PREFIX", [str(fake)])
 
-    ctx = FakeContext.defaults(cfg_path)
+    ctx = FakeContext.defaults(cfg_path, tmpdir=tmp_path)
     with open(cfg_path, "w") as fh:
         fh.write(config2)
     monkeypatch.setattr(
@@ -165,6 +182,11 @@ def test_update_config_changed(tmp_path, monkeypatch):
         functools.partial(
             sambacc.paths.ensure_share_dirs, root=str(tmp_path / "_root")
         ),
+    )
+    monkeypatch.setattr(
+        sambacc.commands.config,
+        "sync_passdb_users",
+        unittest.mock.MagicMock(),
     )
     sambacc.commands.config.update_config(ctx)
 
@@ -184,7 +206,7 @@ def test_update_config_smbcontrol_fails(tmp_path, monkeypatch, caplog):
     _gen_fake_cmd(fake, str(chkpath), fail_cmd="smbcontrol")
     monkeypatch.setattr(sambacc.samba_cmds, "_GLOBAL_PREFIX", [str(fake)])
 
-    ctx = FakeContext.defaults(cfg_path)
+    ctx = FakeContext.defaults(cfg_path, tmpdir=tmp_path)
     with open(cfg_path, "w") as fh:
         fh.write(config2)
     monkeypatch.setattr(
@@ -193,6 +215,11 @@ def test_update_config_smbcontrol_fails(tmp_path, monkeypatch, caplog):
         functools.partial(
             sambacc.paths.ensure_share_dirs, root=str(tmp_path / "_root")
         ),
+    )
+    monkeypatch.setattr(
+        sambacc.commands.config,
+        "sync_passdb_users",
+        unittest.mock.MagicMock(),
     )
     with caplog.at_level("WARNING"):
         sambacc.commands.config.update_config(ctx)
@@ -214,7 +241,7 @@ def test_update_config_changed_ctdb(tmp_path, monkeypatch):
     _gen_fake_cmd(fake, str(chkpath))
     monkeypatch.setattr(sambacc.samba_cmds, "_GLOBAL_PREFIX", [str(fake)])
 
-    ctx = FakeContext.defaults(cfg_path)
+    ctx = FakeContext.defaults(cfg_path, tmpdir=tmp_path)
     ctx.instance_config.iconfig["instance_features"] = ["ctdb"]
     assert ctx.instance_config.with_ctdb
     with open(cfg_path, "w") as fh:
@@ -225,6 +252,11 @@ def test_update_config_changed_ctdb(tmp_path, monkeypatch):
         functools.partial(
             sambacc.paths.ensure_share_dirs, root=str(tmp_path / "_root")
         ),
+    )
+    monkeypatch.setattr(
+        sambacc.commands.config,
+        "sync_passdb_users",
+        unittest.mock.MagicMock(),
     )
     sambacc.commands.config.update_config(ctx)
 
@@ -241,7 +273,7 @@ def test_update_config_ctdb_notleader(tmp_path, monkeypatch):
     _gen_fake_cmd(fake, str(chkpath), pnn="")
     monkeypatch.setattr(sambacc.samba_cmds, "_GLOBAL_PREFIX", [str(fake)])
 
-    ctx = FakeContext.defaults(cfg_path)
+    ctx = FakeContext.defaults(cfg_path, tmpdir=tmp_path)
     ctx.instance_config.iconfig["instance_features"] = ["ctdb"]
     assert ctx.instance_config.with_ctdb
     with open(cfg_path, "w") as fh:
@@ -252,6 +284,11 @@ def test_update_config_ctdb_notleader(tmp_path, monkeypatch):
         functools.partial(
             sambacc.paths.ensure_share_dirs, root=str(tmp_path / "_root")
         ),
+    )
+    monkeypatch.setattr(
+        sambacc.commands.config,
+        "sync_passdb_users",
+        unittest.mock.MagicMock(),
     )
     sambacc.commands.config.update_config(ctx)
 
@@ -279,13 +316,18 @@ def test_update_config_watch_waiter_expires(tmp_path, monkeypatch):
 
     monkeypatch.setattr(sambacc.commands.config, "best_waiter", _fake_waiter)
 
-    ctx = FakeContext.defaults(cfg_path, watch=True)
+    ctx = FakeContext.defaults(cfg_path, watch=True, tmpdir=tmp_path)
     monkeypatch.setattr(
         sambacc.paths,
         "ensure_share_dirs",
         functools.partial(
             sambacc.paths.ensure_share_dirs, root=str(tmp_path / "_root")
         ),
+    )
+    monkeypatch.setattr(
+        sambacc.commands.config,
+        "sync_passdb_users",
+        unittest.mock.MagicMock(),
     )
     sambacc.commands.config.update_config(ctx)
 
@@ -317,13 +359,18 @@ def test_update_config_watch_waiter_trigger3(tmp_path, monkeypatch):
     monkeypatch.setattr(sambacc.commands.config, "best_waiter", _fake_waiter)
     fake_waiter.on_count[3] = _new_conf
 
-    ctx = FakeContext.defaults(cfg_path, watch=True)
+    ctx = FakeContext.defaults(cfg_path, watch=True, tmpdir=tmp_path)
     monkeypatch.setattr(
         sambacc.paths,
         "ensure_share_dirs",
         functools.partial(
             sambacc.paths.ensure_share_dirs, root=str(tmp_path / "_root")
         ),
+    )
+    monkeypatch.setattr(
+        sambacc.commands.config,
+        "sync_passdb_users",
+        unittest.mock.MagicMock(),
     )
     sambacc.commands.config.update_config(ctx)
 
