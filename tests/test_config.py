@@ -166,6 +166,47 @@ config3 = """
 }
 """
 
+config4 = """
+{
+  "samba-container-config": "v0",
+  "configs": {
+    "foobar": {
+      "shares": ["share"],
+      "globals": ["global0"],
+      "instance_name": "GANDOLPH"
+    }
+  },
+  "shares": {
+    "share": {
+      "options": {
+        "path": "/share"
+      }
+    }
+  },
+  "globals": {
+    "global0": {
+      "options": {
+        "security": "user"
+      }
+    }
+  },
+  "users": {
+      "all_entries": [
+        {"name": "alice", "uid": 2001, "gid": 2001,
+         "password": "123fakeStreet"},
+        {"name": "bob", "uid": 2002, "gid": 2002,
+         "password": "notSoSafe"}
+      ]
+  },
+  "groups": {
+      "all_entries": [
+        {"name": "readers", "gid": 3000, "members": ["alice", "bob"]},
+        {"name": "writers", "gid": 3001, "members": ["alice"]}
+      ]
+  }
+}
+"""
+
 ctdb_config1 = """
 {
   "samba-container-config": "v0",
@@ -470,6 +511,36 @@ class TestConfig(unittest.TestCase):
         assert groups[1].gid == 2001
         assert groups[2].groupname == "carol"
         assert groups[2].gid == 1002
+
+    def test_group_entry_with_members(self):
+        fh = io.StringIO(config4)
+        g = sambacc.config.GlobalConfig(fh)
+        ic = g.get("foobar")
+        groups = list(ic.groups())
+        assert groups[0].groupname == "readers"
+        assert groups[0].members == ["alice", "bob"]
+        assert groups[0].group_fields() == (
+            "readers",
+            "x",
+            "3000",
+            "alice,bob",
+        )
+        assert groups[1].groupname == "writers"
+        assert groups[1].members == ["alice"]
+        assert groups[1].group_fields() == ("writers", "x", "3001", "alice")
+
+    def test_group_entry_without_members(self):
+        fh = io.StringIO(config3)
+        g = sambacc.config.GlobalConfig(fh)
+        ic = g.get("foobar")
+        groups = list(ic.groups())
+        assert groups[0].members == []
+        assert groups[0].group_fields()[3] == ""
+
+    def test_invalid_group_members(self):
+        rec = {"name": "foo", "members": "not_a_list"}
+        with pytest.raises(ValueError):
+            sambacc.config.GroupEntry(None, rec, 0)
 
 
 def test_read_config_files(tmpdir):
