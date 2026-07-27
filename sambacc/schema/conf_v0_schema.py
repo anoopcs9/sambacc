@@ -103,6 +103,13 @@ SCHEMA = {
                     "description": "The Unix GID the group should have",
                     "type": "integer",
                 },
+                "members": {
+                    "description": (
+                        "List of usernames that belong to this group"
+                    ),
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
             },
             "required": ["name"],
             "additionalProperties": False,
