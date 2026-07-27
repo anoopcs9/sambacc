@@ -614,9 +614,12 @@ class GroupEntry:
         self.entry_num = num
         self._gid = grec.get("gid")
         self.ou = grec.get("ou")
+        self.members: list[str] = grec.get("members", [])
         if self._gid is not None:
             if not isinstance(self._gid, int):
                 raise ValueError("invalid gid value")
+        if not isinstance(self.members, list):
+            raise ValueError("members should contain a list of user names")
 
     @property
     def gid(self) -> int:
@@ -626,7 +629,7 @@ class GroupEntry:
 
     def group_fields(self) -> GroupEntryTuple:
         # fields: name, passwd, gid, members(comma separated)
-        return (self.groupname, "x", str(self.gid), "")
+        return (self.groupname, "x", str(self.gid), ",".join(self.members))
 
 
 class DomainConfig:
