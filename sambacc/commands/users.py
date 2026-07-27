@@ -46,8 +46,20 @@ def sync_sys_users(
 
     etc_passwd_loader = ugl.PasswdFileLoader(passwd_location.writable)
     etc_group_loader = ugl.GroupFileLoader(group_location.writable)
-    etc_passwd_loader.read()
-    etc_group_loader.read()
+    try:
+        etc_passwd_loader.read()
+    except FileNotFoundError:
+        # if we are not using altfiles we expect an existing readable passwd
+        # file. re-raise the exception if we are not using altfiles
+        if not passwd_location.altfiles:
+            raise
+    try:
+        etc_group_loader.read()
+    except FileNotFoundError:
+        # if we are not using altfiles we expect an existing readable group
+        # file. re-raise the exception if we are not using altfiles
+        if not group_location.altfiles:
+            raise
     for u in iconfig.users():
         etc_passwd_loader.add_user(u)
     for g in iconfig.groups():
