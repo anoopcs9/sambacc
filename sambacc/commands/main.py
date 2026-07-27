@@ -21,7 +21,7 @@ import typing
 
 from . import config as config_cmds
 from . import skips
-from .cli import commands, Fail
+from .cli import commands, CommandBuilder, Fail
 from .common import (
     CommandContext,
     enable_logging,
@@ -37,7 +37,12 @@ def main(args: typing.Optional[typing.Sequence[str]] = None) -> None:
     commands.include_multiple(
         [".check", ".ctdb", ".dns", ".initialize", ".join", ".run", ".users"]
     )
+    return main_command(commands, args)
 
+
+def main_command(
+    commands: CommandBuilder, args: typing.Optional[typing.Sequence[str]]
+) -> None:
     cli = commands.assemble(arg_func=global_args).parse_args(args)
     env_to_cli(cli)
     enable_logging(cli)
