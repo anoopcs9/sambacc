@@ -82,7 +82,24 @@ class GroupFileLoader(LineFileLoader):
 
     def add_group(self, group_entry: config.GroupEntry) -> None:
         if group_entry.groupname in self._groupnames:
+            self._update_group_members(group_entry)
             return
         line = "{}\n".format(":".join(group_entry.group_fields()))
         self.lines.append(line)
         self._groupnames.add(group_entry.groupname)
+
+    def _update_group_members(self, group_entry: config.GroupEntry) -> None:
+        new_members = group_entry.group_fields()[3]
+        for idx, line in enumerate(self.lines):
+            if ":" not in line:
+                continue
+            fields = line.rstrip("\n").split(":")
+            if len(fields) < 4:
+                continue
+            if fields[0] != group_entry.groupname:
+                continue
+            if fields[3] == new_members:
+                return
+            fields[3] = new_members
+            self.lines[idx] = "{}\n".format(":".join(fields))
+            return
