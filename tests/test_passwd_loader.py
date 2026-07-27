@@ -1,7 +1,7 @@
 import io
 
 import sambacc.passwd_loader
-from .test_config import config2
+from .test_config import config2, config4
 
 etc_passwd1 = """
 root:x:0:0:root:/root:/bin/bash
@@ -152,3 +152,59 @@ def test_write_passwd_file(tmp_path):
     assert "\nalice:x:" in txt
     assert "\nbob:x:" in txt
     assert "\ncarol:x:" in txt
+
+
+def test_add_group_with_members():
+    fh = io.StringIO(config4)
+    g = sambacc.config.GlobalConfig(fh)
+    ic = g.get("foobar")
+    groups = list(ic.groups())
+
+    gfl = sambacc.passwd_loader.GroupFileLoader()
+    for grp in groups:
+        gfl.add_group(grp)
+    fh2 = io.StringIO()
+    gfl.writefp(fh2)
+    txt = fh2.getvalue()
+    assert "readers:x:3000:alice,bob" in txt
+    assert "writers:x:3001:alice" in txt
+
+
+def test_add_group_updates_members_on_existing():
+    fh = io.StringIO(etc_group1)
+    gfl = sambacc.passwd_loader.GroupFileLoader()
+    gfl.readfp(fh)
+    original_count = len(gfl.lines)
+
+    fh2 = io.StringIO(config4)
+    g = sambacc.config.GlobalConfig(fh2)
+    ic = g.get("foobar")
+
+    rec = {"name": "wheel", "gid": 10, "members": ["alice", "bob"]}
+    wheel = sambacc.config.GroupEntry(ic, rec, 0)
+    gfl.add_group(wheel)
+
+    assert len(gfl.lines) == original_count
+    fh3 = io.StringIO()
+    gfl.writefp(fh3)
+    txt = fh3.getvalue()
+    assert "wheel:x:10:alice,bob" in txt
+
+
+def test_add_group_idempotent_members():
+    fh = io.StringIO(config4)
+    g = sambacc.config.GlobalConfig(fh)
+    ic = g.get("foobar")
+    groups = list(ic.groups())
+
+    gfl = sambacc.passwd_loader.GroupFileLoader()
+    for grp in groups:
+        gfl.add_group(grp)
+    count_after_first = len(gfl.lines)
+    for grp in groups:
+        gfl.add_group(grp)
+    assert len(gfl.lines) == count_after_first
+    fh2 = io.StringIO()
+    gfl.writefp(fh2)
+    txt = fh2.getvalue()
+    assert txt.count("readers:x:3000:alice,bob") == 1
