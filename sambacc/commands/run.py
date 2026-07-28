@@ -36,7 +36,8 @@ INIT_ALL = "init-all"
 SMBD = "smbd"
 WINBINDD = "winbindd"
 CTDBD = "ctdbd"
-TARGETS = [SMBD, WINBINDD, CTDBD]
+CONFIGWATCH = "configwatch"
+TARGETS = [SMBD, WINBINDD, CTDBD, CONFIGWATCH]
 
 
 class WaitForCTDBCondition:
@@ -99,6 +100,16 @@ def _run_container_args(parser):
             " Based on env vars JOIN_USERNAME and INSECURE_JOIN_PASSWORD."
         ),
     )
+    # XXX: HACK - for embedded configwatch (starts with --config-watch- for
+    # pseudo namespacing)
+    parser.add_argument(
+        "--config-watch-signal-pids-dir",
+        dest="signal_pids_dir",
+        help=(
+            "Directory storing pid files."
+            " PIDs saved in files will be sent SIGHUP on config change."
+        ),
+    )
     parser.add_argument(
         "target",
         choices=TARGETS,
@@ -154,5 +165,19 @@ def run_container(ctx: Context) -> None:
         samba_cmds.execute(samba_cmds.winbindd_foreground())
     elif ctx.cli.target == "ctdbd":
         samba_cmds.execute(samba_cmds.ctdbd_foreground)
+    elif ctx.cli.target == CONFIGWATCH:
+        _wrap_configwatch(ctx)
     else:
         raise Fail(f"invalid target process: {ctx.cli.target}")
+
+
+def _wrap_configwatch(ctx: Context) -> None:
+    """Start configwatch (update-config --watch) via the run command instead of
+    the normal path, allowing configwatch to "steal" the setup capabilties of
+    the run subcommand without needing to do a huge refactoring of the command
+    handling/--setup args.
+    """
+    import sambacc.commands.config
+
+    ctx.cli.watch = True
+    sambacc.commands.config.update_config(ctx)
