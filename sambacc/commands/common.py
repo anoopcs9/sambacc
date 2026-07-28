@@ -38,6 +38,9 @@ from .cli import Parser, ceph_id, AltLocation
 DEFAULT_CONFIG = "/etc/samba/container/config.json"
 DEFAULT_JOIN_MARKER = "/var/lib/samba/container-join-marker.json"
 
+_ETC_PASSWD = AltLocation("/etc/passwd")
+_ETC_GROUP = AltLocation("/etc/group")
+
 
 class CommandContext:
     """CLI Context for standard samba-container commands."""
@@ -165,6 +168,22 @@ def env_to_cli(cli: argparse.Namespace) -> None:
     from_env(cli, "samba_debug_level", "SAMBA_DEBUG_LEVEL")
     from_env(cli, "validate_config", "SAMBACC_VALIDATE_CONFIG")
     from_env(cli, "ceph_id", "SAMBACC_CEPH_ID", convert_value=ceph_id)
+    from_env(
+        cli,
+        "passwd_location",
+        "SAMBACC_PASSWD_LOCATION",
+        default_obj=_ETC_PASSWD,
+        convert_env=lambda v: AltLocation.parse(v) if v else None,
+        convert_value=None,
+    )
+    from_env(
+        cli,
+        "group_location",
+        "SAMBACC_GROUP_LOCATION",
+        default_obj=_ETC_GROUP,
+        convert_env=lambda v: AltLocation.parse(v) if v else None,
+        convert_value=None,
+    )
 
 
 def pre_action(cli: argparse.Namespace) -> None:
@@ -218,16 +237,24 @@ def global_args(parser: Parser) -> None:
         ),
     )
     parser.add_argument(
-        "--etc-passwd-path",
-        default=AltLocation("/etc/passwd"),
+        "--passwd-location",
+        "--etc-passwd-path",  # deprecated alias
+        default=_ETC_PASSWD,
         type=AltLocation.parse,
-        help="Specify a path for the passwd file.",
+        help=(
+            "Specify a path, or colon separated path-spec"
+            " <default>:<writable>[:<symlink>], for the passwd file."
+        ),
     )
     parser.add_argument(
-        "--etc-group-path",
-        default=AltLocation("/etc/group"),
+        "--group-location",
+        "--etc-group-path",  # deprecated alias
+        default=_ETC_GROUP,
         type=AltLocation.parse,
-        help="Specify a path for the group file.",
+        help=(
+            "Specify a path, or colon separated path-spec"
+            " <default>:<writable>[:<symlink>], for the group file."
+        ),
     )
     parser.add_argument(
         "--username",
