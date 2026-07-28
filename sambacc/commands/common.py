@@ -121,7 +121,8 @@ def from_env(
     ns: argparse.Namespace,
     var: str,
     ename: str,
-    default: typing.Any = None,
+    *,
+    default_obj: typing.Any = None,
     convert_env: typing.Optional[typing.Callable] = None,
     convert_value: typing.Optional[typing.Callable] = str,
 ) -> None:
@@ -130,7 +131,7 @@ def from_env(
     not directly provided.
     """
     value = getattr(ns, var, None)
-    if not value:
+    if not value or (default_obj is not None and value is default_obj):
         value = os.environ.get(ename, "")
         if convert_env is not None:
             value = convert_env(value)
@@ -150,7 +151,6 @@ def env_to_cli(cli: argparse.Namespace) -> None:
         "SAMBACC_CONFIG",
         convert_env=split_entries,
         convert_value=None,
-        default=DEFAULT_CONFIG,
     )
     from_env(
         cli,
