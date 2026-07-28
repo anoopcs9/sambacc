@@ -214,20 +214,29 @@ def _samba_config(chctx: ChangeContext) -> ChangeContext:
 
 
 def _ctr_users_groups(ctx: Context, chctx: ChangeContext) -> ChangeContext:
-    """Update host (container) defined users and groups if the users/groups
-    have changed.
+    """Update host (container) defined users and groups (passwd file) if the
+    users/groups have changed.
     """
     if not chctx.match(config.DifferenceFlag.USERS_GROUPS):
         return chctx
 
     # update users and groups if they changed
     _logger.info("Updating users and groups")
-
     sync_sys_users(
         chctx.current,
         ctx.cli.passwd_location,
         ctx.cli.group_location,
     )
+    return chctx.set_applied()
+
+
+def _sync_passdb(ctx: Context, chctx: ChangeContext) -> ChangeContext:
+    """Update samba's passdb if the users/groups have changed."""
+    if not chctx.match(config.DifferenceFlag.USERS_GROUPS):
+        return chctx
+
+    # update users and groups if they changed
+    _logger.info("Updating samba passdb")
     sync_passdb_users(chctx.current)
     return chctx.set_applied()
 
@@ -317,6 +326,7 @@ def update_config(ctx: Context) -> None:
     )
     cb_samba_config = _samba_config
     cb_ctr_users_groups = functools.partial(_ctr_users_groups, ctx)
+    cb_passdb = functools.partial(_sync_passdb, ctx)
     trigger = Trigger()
 
     if ctx.instance_config.with_ctdb:
@@ -324,10 +334,12 @@ def update_config(ctx: Context) -> None:
         cb_share_paths_shared = functools.partial(
             _when_leader, cb_share_paths_shared
         )
+        cb_passdb = functools.partial(_when_leader, cb_passdb)
         cb_samba_config = functools.partial(_when_leader, cb_samba_config)
     trigger.add("paths_shared", cb_share_paths_shared)
     trigger.add("paths_local", cb_share_paths_local)
     trigger.add("users_groups", cb_ctr_users_groups)
+    trigger.add("sync_passdb", cb_passdb)
     trigger.add("samba", cb_samba_config)
     if pids_dir := ctx.cli.signal_pids_dir:
         trigger.add("pids", functools.partial(_signal_pids_dir, pids_dir))
