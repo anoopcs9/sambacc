@@ -17,6 +17,7 @@
 #
 
 import argparse
+import dataclasses
 import functools
 import logging
 import os
@@ -26,9 +27,11 @@ import subprocess
 import sys
 import typing
 
+
 from sambacc import config
 from sambacc import samba_cmds
 from sambacc.simple_waiter import watch
+from sambacc.typelets import Self
 import sambacc.netcmd_loader as nc
 import sambacc.paths as paths
 
@@ -91,6 +94,56 @@ def _read_config(ctx: Context) -> config.InstanceConfig:
         require_validation=ctx.require_validation,
         opener=ctx.opener,
     ).get(ctx.cli.identity)
+
+
+@dataclasses.dataclass(frozen=True)
+class ChangeContext:
+    current: config.InstanceConfig
+    previous: typing.Optional[config.InstanceConfig] = None
+    differences: typing.Optional[set[config.DifferenceFlag]] = None
+    applied: int = 0
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.differences)
+
+    @property
+    def updated(self) -> bool:
+        return bool(self.applied)
+
+    def _all_differences(self) -> set[config.DifferenceFlag]:
+        return set() if self.differences is None else self.differences
+
+    def match(
+        self,
+        flags: typing.Union[
+            config.DifferenceFlag, typing.Iterable[config.DifferenceFlag]
+        ],
+        *,
+        wildcard_type_diff: bool = True,
+    ) -> bool:
+        """Return true if any of the flags specified are in the differences
+        set. If wildcard_type_diff is true, it treats a type mismatch (e.g.
+        previous is None) as a flag match.
+        """
+        adiff = self._all_differences()
+        if wildcard_type_diff and config.DifferenceFlag.TYPE in adiff:
+            return True
+        if isinstance(flags, config.DifferenceFlag):
+            flags = [flags]
+        return any(f in adiff for f in flags)
+
+    def diff(self) -> Self:
+        # cached differences
+        if self.differences is not None:
+            return self
+        # no differences set yet, get fresh
+        differences = self.current.compare(self.previous, log_diff=_log_diff)
+        _logger.debug("config differences found: %r", differences)
+        return dataclasses.replace(self, differences=differences)
+
+    def set_applied(self) -> Self:
+        return dataclasses.replace(self, applied=self.applied + 1)
 
 
 UpdateResult = typing.Tuple[typing.Optional[config.InstanceConfig], bool]
