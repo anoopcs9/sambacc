@@ -28,7 +28,6 @@ import sambacc.config
 from ..cli import Context, Fail, commands
 from ..common import CommandContext
 
-
 if typing.TYPE_CHECKING:
     import sambacc.varlink.keybridge
 

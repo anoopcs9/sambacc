@@ -29,7 +29,6 @@ from .common import (
     pre_action,
 )
 
-
 default_cfunc = addc.summary
 
 

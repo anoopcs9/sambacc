@@ -30,7 +30,6 @@ import varlink  # type: ignore[import]
 from sambacc.typelets import Self
 from .endpoint import VarlinkEndpoint
 
-
 _logger = logging.getLogger(__name__)
 
 
@@ -61,12 +60,14 @@ class KeyBridgeError(varlink.VarlinkError):
 
 class ScopeNotFoundError(KeyBridgeError):
     "ScopeName may be returned if a request refers to an unknown scope."
+
     _name = "ScopeNotFound"
     _expect = {"scope"}
 
 
 class EntryNotFoundError(KeyBridgeError):
     "EntryNotFound may returned if a request refers to an unknown entry."
+
     _name = "EntryNotFound"
     _expect = {"name", "scope"}
 

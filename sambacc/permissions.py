@@ -27,7 +27,6 @@ import typing
 
 from sambacc import _xattr as xattr
 
-
 _logger = logging.getLogger(__name__)
 
 

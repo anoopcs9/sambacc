@@ -30,7 +30,6 @@ import varlink.server  # type: ignore[import]
 
 from .endpoint import VarlinkEndpoint
 
-
 _logger = logging.getLogger(__name__)
 
 _VET = typing.Type[varlink.error.VarlinkEncoder]

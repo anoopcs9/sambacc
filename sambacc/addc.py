@@ -103,7 +103,7 @@ def add_group_members(group_name: str, members: list[str]) -> None:
 
 
 def _filter_opts(
-    options: typing.Optional[typing.Iterable[tuple[str, str]]]
+    options: typing.Optional[typing.Iterable[tuple[str, str]]],
 ) -> list[tuple[str, str]]:
     _skip_keys = ["netbios name"]
     options = options or []
