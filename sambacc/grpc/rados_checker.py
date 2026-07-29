@@ -23,7 +23,6 @@ import grpc
 import sambacc.ceph.rados
 import sambacc.grpc.config
 
-
 _logger = logging.getLogger(__name__)
 
 

@@ -27,7 +27,6 @@ could have been accomplished by writing a pyi file for xattr but since
 we need the runtime support we just add new functions.
 """
 
-
 import pathlib
 import typing
 

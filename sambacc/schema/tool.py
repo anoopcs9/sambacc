@@ -13,7 +13,6 @@ import sys
 
 import yaml
 
-
 nameparts = collections.namedtuple("nameparts", "full head ext")
 filepair = collections.namedtuple("filepair", "origin dest format")
 

@@ -38,7 +38,6 @@ from sambacc.varlink.keybridge import (
     ScopeInfo,
 )
 
-
 _logger = logging.getLogger(__name__)
 
 # use monotonic if possible, otherwise fall back to traditional time.time.
@@ -58,6 +57,7 @@ class TLSPaths:
 @dataclasses.dataclass
 class _Value:
     "Cached value."
+
     value: bytes
     created: int
 

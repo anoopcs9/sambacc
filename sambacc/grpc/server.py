@@ -48,7 +48,6 @@ from sambacc.grpc.config import (
     ServerConfig,
 )
 
-
 _logger = logging.getLogger(__name__)
 
 

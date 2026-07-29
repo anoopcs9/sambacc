@@ -76,7 +76,7 @@ def toggle_option(parser: Parser, arg: str, dest: str, helpfmt: str) -> Parser:
 
 
 def ceph_id(
-    value: typing.Union[str, dict[str, typing.Any]]
+    value: typing.Union[str, dict[str, typing.Any]],
 ) -> dict[str, typing.Any]:
     """Parse a string value into a dict containing ceph id values.
     The input should contain name= or rados_id= to identify the kind

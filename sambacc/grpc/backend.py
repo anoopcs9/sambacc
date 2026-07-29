@@ -33,7 +33,6 @@ from sambacc.typelets import Self
 import sambacc.config
 import sambacc.samba_cmds
 
-
 _logger = logging.getLogger(__name__)
 CTDB_CONF_PATH = "/etc/ctdb/ctdb.conf"
 

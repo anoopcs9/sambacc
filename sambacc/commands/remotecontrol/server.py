@@ -28,7 +28,6 @@ from ..common import CommandContext
 
 import sambacc.grpc.config
 
-
 _logger = logging.getLogger(__name__)
 _AUTO = "auto"  # allow modifications based on conn settings
 _MTLS = "mtls"  # allow modifications based on conn tls settings
