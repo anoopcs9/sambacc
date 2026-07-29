@@ -29,7 +29,6 @@ import sambacc.passdb_loader
 import sambacc.commands.config
 import sambacc.commands.cli
 
-
 config1 = """
 {
     "samba-container-config": "v0",
