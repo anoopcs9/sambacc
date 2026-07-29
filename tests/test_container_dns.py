@@ -21,7 +21,6 @@ import time
 
 import sambacc.container_dns
 
-
 J1 = """
 {
   "ref": "example",

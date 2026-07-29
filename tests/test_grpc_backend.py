@@ -24,7 +24,6 @@ import pytest
 
 import sambacc.grpc.backend
 
-
 config1 = """
 {
   "samba-container-config": "v0",
