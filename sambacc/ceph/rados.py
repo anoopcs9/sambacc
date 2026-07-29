@@ -406,7 +406,7 @@ def is_rados_uri(uri: str) -> bool:
 
 
 def parse_rados_uri(
-    uri: typing.Union[str, urllib.request.Request]
+    uri: typing.Union[str, urllib.request.Request],
 ) -> dict[str, str]:
     """Given a rados uri-like value return a dict containing a breakdown of the
     components of the uri.

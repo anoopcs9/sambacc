@@ -29,7 +29,6 @@ from .cli import commands, Context, Fail
 from .initialize import init_container, setup_step_names
 from .join import join
 
-
 _logger = logging.getLogger(__name__)
 
 INIT_ALL = "init-all"

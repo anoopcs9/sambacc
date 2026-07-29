@@ -27,7 +27,6 @@ from . import config  # noqa: F401
 from . import users  # noqa: F401
 from .cli import commands, perms_handler, setup_steps, Context
 
-
 _logger = logging.getLogger(__name__)
 
 

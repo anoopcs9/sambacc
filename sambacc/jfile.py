@@ -15,8 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>
 #
-"""Utilities for working with JSON data stored in a file system file.
-"""
+"""Utilities for working with JSON data stored in a file system file."""
 
 import fcntl
 import json
