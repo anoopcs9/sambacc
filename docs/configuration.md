@@ -168,6 +168,9 @@ Each configuration section is as follows:
   configurations.
 * `domain_settings` - String. Name of the AD DC domain configuration. Required
   for AD DC configurations, invalid for all others.
+* `sharemeta` - Share metadata section. Default metadata for shares that
+  don't specify their own `meta` section. Same fields as the `meta` section
+  described under the Shares Section, below.
 
 The subsections under `configs` can be used to uniquely identify one server
 "instance". Because those server instances may repeat the shares and samba
@@ -193,6 +196,9 @@ Each share configuration section is as follows:
   * `status_xattr` - Name of xattr to store status.
   * Remaining key-value pairs are method specific. Unknown keys are ignored.
   * `mode` - String that converts to octal. Unix permissions to set (`initialize-share-perms`, `always-share-perms`).
+* `meta` - Share metadata section:
+  * `origin` - Classifies where the share's storage lives. One of `unknown`,
+    `local`, `shared` (default), `virtual`.
 
 
 ## Globals Section
