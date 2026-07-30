@@ -41,6 +41,24 @@ SCHEMA = {
             "type": "object",
             "additionalProperties": {"type": "string"},
         },
+        "share_meta_config": {
+            "description": "Metadata about a share's storage.\n",
+            "type": "object",
+            "properties": {
+                "origin": {
+                    "description": (
+                        'The kind of storage the share is based on. "local"'
+                        " storage should\nbe set up on every CTDB cluster"
+                        ' node; "shared" storage (the\ndefault) only needs'
+                        ' setup on the cluster leader; "virtual" storage\nis'
+                        " not accessible via POSIX apis.\n"
+                    ),
+                    "type": "string",
+                    "enum": ["unknown", "local", "shared", "virtual"],
+                }
+            },
+            "additionalProperties": False,
+        },
         "permissions_config": {
             "description": (
                 "Settings that enable and manage sambacc's permissions"
@@ -219,6 +237,7 @@ SCHEMA = {
                     "globals": {"$ref": "#/$defs/section_choices"},
                     "instance_features": {"$ref": "#/$defs/feature_flags"},
                     "permissions": {"$ref": "#/$defs/permissions_config"},
+                    "sharemeta": {"$ref": "#/$defs/share_meta_config"},
                     "instance_name": {
                         "description": (
                             "A name that will be set for the server"
@@ -250,6 +269,7 @@ SCHEMA = {
                 "properties": {
                     "options": {"$ref": "#/$defs/samba_options"},
                     "permissions": {"$ref": "#/$defs/permissions_config"},
+                    "meta": {"$ref": "#/$defs/share_meta_config"},
                 },
                 "additionalProperties": False,
             },

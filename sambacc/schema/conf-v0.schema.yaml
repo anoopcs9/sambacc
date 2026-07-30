@@ -44,6 +44,25 @@ $defs:
     type: object
     additionalProperties:
       type: string
+  # metadata describing where a share's storage is hosted
+  share_meta_config:
+    description: |
+      Metadata about a share's storage.
+    type: object
+    properties:
+      origin:
+        description: |
+          The kind of storage the share is based on. "local" storage should
+          be set up on every CTDB cluster node; "shared" storage (the
+          default) only needs setup on the cluster leader; "virtual" storage
+          is not accessible via POSIX apis.
+        type: string
+        enum:
+          - unknown
+          - local
+          - shared
+          - virtual
+    additionalProperties: false
   # permissions backend configurations
   # each backend may have its own set of additional properties
   permissions_config:
@@ -202,6 +221,8 @@ properties:
           $ref: "#/$defs/feature_flags"
         permissions:
           $ref: "#/$defs/permissions_config"
+        sharemeta:
+          $ref: "#/$defs/share_meta_config"
         instance_name:
           description: |
             A name that will be set for the server instance.
@@ -225,6 +246,8 @@ properties:
           $ref: "#/$defs/samba_options"
         permissions:
           $ref: "#/$defs/permissions_config"
+        meta:
+          $ref: "#/$defs/share_meta_config"
       additionalProperties: false
   # globals definitions.
   globals:

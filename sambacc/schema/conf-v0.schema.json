@@ -29,6 +29,23 @@
         "type": "string"
       }
     },
+    "share_meta_config": {
+      "description": "Metadata about a share's storage.\n",
+      "type": "object",
+      "properties": {
+        "origin": {
+          "description": "The kind of storage the share is based on. \"local\" storage should\nbe set up on every CTDB cluster node; \"shared\" storage (the\ndefault) only needs setup on the cluster leader; \"virtual\" storage\nis not accessible via POSIX apis.\n",
+          "type": "string",
+          "enum": [
+            "unknown",
+            "local",
+            "shared",
+            "virtual"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "permissions_config": {
       "description": "Settings that enable and manage sambacc's permissions management support.\n",
       "type": "object",
@@ -208,6 +225,9 @@
           "permissions": {
             "$ref": "#/$defs/permissions_config"
           },
+          "sharemeta": {
+            "$ref": "#/$defs/share_meta_config"
+          },
           "instance_name": {
             "description": "A name that will be set for the server instance.\n",
             "type": "string"
@@ -231,6 +251,9 @@
           },
           "permissions": {
             "$ref": "#/$defs/permissions_config"
+          },
+          "meta": {
+            "$ref": "#/$defs/share_meta_config"
           }
         },
         "additionalProperties": false
