@@ -247,6 +247,7 @@ The `groups` section supports one key, `all_entries`, which is a list of
 group entries. Each group entry is as follows:
 * `name` - The user's name.
 * `gid` - Optional integer. Specify the exact Unix GID the group should have.
+* `members` - Optional list of strings. User names that are members of the group.
 
 
 ## Domain Settings Section
