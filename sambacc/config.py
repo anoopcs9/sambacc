@@ -614,12 +614,14 @@ class GroupEntry:
         self.entry_num = num
         self._gid = grec.get("gid")
         self.ou = grec.get("ou")
-        self.members: list[str] = grec.get("members", [])
+        members = grec.get("members", [])
+        if not isinstance(members, list):
+            raise ValueError("members should contain a list of user names")
+        # use dict.fromkeys to deduplicate while preserving order
+        self.members: list[str] = list(dict.fromkeys(members))
         if self._gid is not None:
             if not isinstance(self._gid, int):
                 raise ValueError("invalid gid value")
-        if not isinstance(self.members, list):
-            raise ValueError("members should contain a list of user names")
 
     @property
     def gid(self) -> int:
