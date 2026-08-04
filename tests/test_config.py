@@ -542,6 +542,11 @@ class TestConfig(unittest.TestCase):
         with pytest.raises(ValueError):
             sambacc.config.GroupEntry(None, rec, 0)
 
+    def test_duplicate_group_members(self):
+        rec = {"name": "foo", "gid": 100, "members": ["alice", "bob", "alice"]}
+        ge = sambacc.config.GroupEntry(None, rec, 0)
+        assert ge.members == ["alice", "bob"]
+
 
 def test_read_config_files(tmpdir):
     fname = tmpdir / "sample.json"
