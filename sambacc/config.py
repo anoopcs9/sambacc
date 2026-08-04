@@ -314,10 +314,21 @@ class InstanceConfig:
             yield UserEntry(self, entry, n)
 
     def groups(self) -> typing.Iterable[GroupEntry]:
-        user_gids = {u.gid: u for u in self.users()}
+        users = list(self.users())
+        user_gids = {}
+        user_names = set()
+        for u in users:
+            user_gids[u.gid] = u
+            user_names.add(u.username)
         all_groups = self.gconfig.data.get("groups", {}).get("all_entries", {})
         for n, entry in enumerate(all_groups):
             ge = GroupEntry(self, entry, n)
+            invalid = set(ge.members) - user_names
+            if invalid:
+                raise ValueError(
+                    f"group {ge.groupname!r} has members not defined"
+                    f" in users: {', '.join(sorted(invalid))}"
+                )
             if ge.gid in user_gids:
                 del user_gids[ge.gid]
             yield ge
