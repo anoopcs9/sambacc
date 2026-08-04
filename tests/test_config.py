@@ -207,6 +207,44 @@ config4 = """
 }
 """
 
+config5 = """
+{
+  "samba-container-config": "v0",
+  "configs": {
+    "foobar": {
+      "shares": ["share"],
+      "globals": ["global0"],
+      "instance_name": "GANDOLPH"
+    }
+  },
+  "shares": {
+    "share": {
+      "options": {
+        "path": "/share"
+      }
+    }
+  },
+  "globals": {
+    "global0": {
+      "options": {
+        "security": "user"
+      }
+    }
+  },
+  "users": {
+      "all_entries": [
+        {"name": "alice", "uid": 2001, "gid": 2001,
+         "password": "123fakeStreet"}
+      ]
+  },
+  "groups": {
+      "all_entries": [
+        {"name": "readers", "gid": 3000, "members": ["alice", "allice"]}
+      ]
+  }
+}
+"""
+
 ctdb_config1 = """
 {
   "samba-container-config": "v0",
@@ -546,6 +584,13 @@ class TestConfig(unittest.TestCase):
         rec = {"name": "foo", "gid": 100, "members": ["alice", "bob", "alice"]}
         ge = sambacc.config.GroupEntry(None, rec, 0)
         assert ge.members == ["alice", "bob"]
+
+    def test_invalid_group_member_names(self):
+        fh = io.StringIO(config5)
+        g = sambacc.config.GlobalConfig(fh)
+        ic = g.get("foobar")
+        with pytest.raises(ValueError, match="allice"):
+            list(ic.groups())
 
 
 def test_read_config_files(tmpdir):
