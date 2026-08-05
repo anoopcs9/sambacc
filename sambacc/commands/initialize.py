@@ -122,6 +122,7 @@ def ensure_share_paths(ctx: Context) -> None:
 
 _default_setup_steps = [
     "config",
+    "share_paths",
     "smb_ctdb",
     "nsswitch_auto",
     "users",
